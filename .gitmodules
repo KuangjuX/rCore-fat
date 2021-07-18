@@ -1,0 +1,3 @@
+[submodule "FAT32"]
+	path = FAT32
+	url = https://github.com/KuangjuX/FAT32.git
