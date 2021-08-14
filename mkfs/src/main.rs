@@ -21,18 +21,20 @@ const FATSIZE: usize = 32;
 struct BlockFile(Arc<Mutex<File>>);
 
 impl BlockDevice for BlockFile {
-    fn read(&self, buf:&mut [u8], addr: usize, block_number: usize) {
+    fn read(&self, block_id: usize, buf: &mut [u8]) {
+        let offset = (block_id * BSIZE) as u64;
         let mut file = self.0.lock().unwrap();
-        file.seek(SeekFrom::Start(addr as u64))
+        file.seek(SeekFrom::Start(offset))
             .expect("Error when seeking!");
-        assert_eq!(file.read(buf).unwrap(), BSIZE * block_number, "Not a complete block!");
+        assert_eq!(file.read(buf).unwrap(), BSIZE, "Not a complete block!");
     }
 
-    fn write(&self, buf: &[u8], addr: usize, block_number: usize) {
+    fn write(&self, block_id: usize, buf: &[u8]) {
+        let offset = (block_id * BSIZE) as u64;
         let mut file = self.0.lock().unwrap();
-        file.seek(SeekFrom::Start(addr as u64))
+        file.seek(SeekFrom::Start(offset))
             .expect("Error when seeking!");
-        assert_eq!(file.write(buf).unwrap(), BSIZE * block_number, "Not a complete block!");
+        assert_eq!(file.write(buf).unwrap(), BSIZE, "Not a complete block!");
     }
 }
 
@@ -49,7 +51,7 @@ impl BlockFile {
     fn zero(&self) {
         let buf = vec![0;BSIZE];
         for i in 0..FSSIZE {
-            self.write(&buf, i * BSIZE, 1);
+            self.write(i, &buf);
         }
     }
 }
@@ -90,15 +92,11 @@ fn main() {
     device.zero();
 
     // Initialize bpb in fs.img
-    let bpb = BIOSParameterBlock::uninit();
-    bpb.byte_per_sector = BSIZE as u16;
-    bpb.sector_per_cluster = 1;
+    let mut bpb = BIOSParameterBlock::uninit();
     bpb.reserved_sector = 1;
     bpb.num_fat = 1;
     bpb.total_sector = FSSIZE as u32;
-    bpb.sector_per_fat = 1;
     bpb.root_cluster = 2;
-    bpb.volume_label = "no name".as_bytes();
     device.write_bpb(&bpb);
 
 
@@ -106,7 +104,7 @@ fn main() {
     let clusters = bpb.count_of_clusters();
 
     // Initlizate File Allocation Table
-    let mut fat = FAT::new(1, device.clone(), 0);
+    let mut fat = FAT::new(1, 0, Arc::new(device.clone()));
     fat.fat_offset = fat1;
     for cluster in 0..= clusters {
         fat.write(cluster as u32, 0xFFFFFFFF);
