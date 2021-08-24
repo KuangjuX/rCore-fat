@@ -1,7 +1,3 @@
-use easy_fs::{
-    EasyFileSystem,
-    Inode,
-};
 use crate::drivers::BLOCK_DEVICE;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -11,6 +7,13 @@ use spin::Mutex;
 use super::File;
 use crate::mm::UserBuffer;
 
+use FAT32::VFile;
+
+pub enum DiskInodeType {
+    File,
+    Directory
+}
+
 pub struct OSInode {
     readable: bool,
     writable: bool,
@@ -18,8 +21,9 @@ pub struct OSInode {
 }
 
 pub struct OSInodeInner {
+    /// 当前读写位置
     offset: usize,
-    inode: Arc<Inode>,
+    inode: Arc<VFile>,
 }
 
 impl OSInode {
@@ -37,6 +41,40 @@ impl OSInode {
             }),
         }
     }
+
+    pub fn is_dir(&self) -> bool {
+        let inner = self.inner.lock();
+        inner.inode.is_dir();
+    }
+
+    pub fn read_vec(&self, offset: isize, len: usize) -> Vec<u8> {
+        let mut inner = self.inner.lock();
+        let mut len = len;
+        let ori_off = inner.offset;
+        if offset >= 0 {
+            inner.offset = offset as usize;
+        }
+        let mut buffer = [0u8; 512];
+        let mut v: Vec<u8> = Vec::new();
+        loop {
+            let rlen = inner.inode.read_at(inner.offset, &mut buffer);
+            if rlen == 0 {
+                break;
+            }
+            inner.offset += rlen;
+            v.extend_from_slice(&buffer[..rlen.min(len)]);
+            if len > rlen {
+                len -= rlen;
+            }else {
+                break;
+            }
+        }
+        if offset >= 0 {
+            inner.offset = ori_off;
+        }
+        v
+    } 
+
     pub fn read_all(&self) -> Vec<u8> {
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
@@ -50,6 +88,39 @@ impl OSInode {
             v.extend_from_slice(&buffer[..len]);
         }
         v
+    }
+
+    pub fn write_all(&self, str_vec: &Vec<u8>) -> usize {
+        let mut inner = self.inner.lock();
+        let mut remain = str_vec.len();
+        let mut base = 0;
+        loop {
+            let len = remain.min(512);
+            inner.inode.write_at(inner.offset, &str_vec.as_slice()[base..base+len]);
+            inner.offset += len;
+            base += len;
+            remain -= len;
+            if remain == 0 {
+                break;
+            }
+        }
+        return base;
+    }
+
+    pub fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+        let inner = self.inner.lock();
+        let mut new_path: Vec<&str> = path.split('/').collect();
+        let vfile = inner.inode.find_vfile_bypath(new_path);
+        if vfile.is_none() {
+            return None
+        } else {
+            let (readable, writable) = flags.read_write();
+            return Some(Arc::new(OSInode::new(
+                readable,
+                writable,
+                vfile.unwrap()
+            )))
+        }
     }
 }
 
