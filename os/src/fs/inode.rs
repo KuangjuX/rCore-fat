@@ -4,10 +4,10 @@ use lazy_static::*;
 use bitflags::*;
 use alloc::vec::Vec;
 use spin::Mutex;
-use super::File;
 use crate::mm::UserBuffer;
 
-use FAT32::VFile;
+use super::{DT_DIR, DT_REG, DT_UNKNOWN, DirEntry, File};
+use FAT32::{ VFile, ATTRIBUTE_ARCHIVE, ATTRIBUTE_DIRECTORY, FAT32Manager };
 
 pub enum DiskInodeType {
     File,
@@ -30,7 +30,7 @@ impl OSInode {
     pub fn new(
         readable: bool,
         writable: bool,
-        inode: Arc<Inode>,
+        inode: Arc<VFile>,
     ) -> Self {
         Self {
             readable,
@@ -44,7 +44,7 @@ impl OSInode {
 
     pub fn is_dir(&self) -> bool {
         let inner = self.inner.lock();
-        inner.inode.is_dir();
+        inner.inode.is_dir()
     }
 
     pub fn read_vec(&self, offset: isize, len: usize) -> Vec<u8> {
@@ -121,6 +121,34 @@ impl OSInode {
                 vfile.unwrap()
             )))
         }
+    }
+
+    pub fn get_dirent(&self, dir_entry: &mut DirEntry) -> Option<usize> {
+        let mut inner = self.inner.lock();
+        let offset = inner.offset as u32;
+        if let Some((name, off, first_clu, attri)) = 
+            inner.inode.dirent_info(offset as usize) {
+                let mut dtype: u8 = 0;
+                if attri & ATTRIBUTE_DIRECTORY != 0 {
+                    dtype = DT_DIR;
+                } else if attri & ATTRIBUTE_ARCHIVE != 0 {
+                    dtype = DT_REG;
+                } else {
+                    dtype = DT_UNKNOWN;
+                }
+                dir_entry.set(
+                    name.as_str(), 
+                    first_clu as usize, 
+                    (off -offset) as isize, 
+                    name.len() as u16, 
+                    dtype
+                );
+                inner.offset = off as usize;
+                let len = name.len() + 8*4;
+                Some(len)
+            } else {
+                None
+            }
     }
 }
 
