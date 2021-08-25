@@ -4,6 +4,17 @@ mod inode;
 mod dir;
 
 use crate::mm::UserBuffer;
+use alloc::sync::Arc;
+
+pub struct FileDescriptor {
+    pub ftype: FileType
+}
+
+/// 文件类型
+pub enum FileType {
+    File(Arc<OSInode>),
+    Abstr(Arc<dyn File>)
+}
 
 pub trait File : Send + Sync {
     fn readable(&self) -> bool;

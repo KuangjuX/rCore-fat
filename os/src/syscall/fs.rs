@@ -1,3 +1,5 @@
+
+
 use crate::mm::{
     UserBuffer,
     translated_byte_buffer,
@@ -5,7 +7,7 @@ use crate::mm::{
     translated_str,
 };
 use crate::task::{current_user_token, current_task};
-use crate::fs::{make_pipe, OpenFlags, open_file};
+use crate::fs::{File, FileType, OpenFlags, make_pipe, open_file};
 use alloc::sync::Arc;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
@@ -16,15 +18,28 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
-        if !file.writable() {
+        let f: Arc<dyn File + Send + Sync> = match &file.ftype {
+            FileType::Abstr(f) => { f.clone() },
+            FileType::File(f) => { f.clone() },
+            _ => return -1,
+        };
+        if !f.writable() {
             return -1;
         }
-        let file = file.clone();
-        // release Task lock manually to avoid deadlock
+
         drop(inner);
-        file.write(
+        let size = f.write(
             UserBuffer::new(translated_byte_buffer(token, buf, len))
-        ) as isize
+        );
+        if fd == 2 {
+            let str = str::replace(
+                translated_str(token, buf).as_str(), "\n", "\\n"
+            );       
+            println!("sys_write(fd: {}, buf: {}, len: {}) = {}", fd, str, len, size);
+        }else if fd > 2 {
+            println!("sys_write(fd: {}, buf: {}, len: {}", fd, len, size);
+        }
+        size as isize
     } else {
         -1
     }

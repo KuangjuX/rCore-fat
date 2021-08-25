@@ -14,8 +14,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use alloc::string::String;
 use spin::{Mutex, MutexGuard};
-use crate::fs::{File, Stdin, Stdout};
+use crate::fs::{File, FileDescriptor, Stdin, Stdout};
 
+pub type FileDescriptorTable = Vec<Option<FileDescriptor>>;
 pub struct TaskControlBlock {
     // immutable
     pub pid: PidHandle,
@@ -33,7 +34,7 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub fd_table: FileDescriptorTable,
 }
 
 impl TaskControlBlockInner {
