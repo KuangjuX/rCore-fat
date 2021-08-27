@@ -150,19 +150,35 @@ impl OSInode {
                 None
             }
     }
+
+    pub fn get_size(&self) -> usize{
+        let inner = self.inner.lock();
+        let (size, _, mt_me, _, _) = inner.inode.stat();
+        return size as usize
+    }
 }
 
+// lazy_static! {
+//     pub static ref ROOT_INODE: Arc<Inode> = {
+//         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
+//         Arc::new(EasyFileSystem::root_inode(&efs))
+//     };
+// }
+
 lazy_static! {
-    pub static ref ROOT_INODE: Arc<Inode> = {
-        let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
-        Arc::new(EasyFileSystem::root_inode(&efs))
+    pub static ref ROOT_INODE: Arc<VFile> = {
+        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+        let manager_reader = fat32_manager.read();
+        Arc::new(manager_reader.get_root_vfile(&fat32_manager))
     };
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls() {
-        println!("{}", app);
+    for app in ROOT_INODE.ls_lite().unwrap() {
+        if app.1 & ATTRIBUTE_DIRECTORY == 0 {
+            println!("{}", app.0);
+        }
     }
     println!("**************/")
 }
@@ -174,6 +190,9 @@ bitflags! {
         const RDWR = 1 << 1;
         const CREATE = 1 << 9;
         const TRUNC = 1 << 10;
+        const DIRECTROY = 0200000;
+        const LARGEFILE  = 0100000;
+        const CLOEXEC = 02000000;
     }
 }
 
@@ -191,37 +210,91 @@ impl OpenFlags {
     }
 }
 
-pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    let (readable, writable) = flags.read_write();
+// pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+//     let (readable, writable) = flags.read_write();
+//     if flags.contains(OpenFlags::CREATE) {
+//         if let Some(inode) = ROOT_INODE.find(name) {
+//             // clear size
+//             inode.clear();
+//             Some(Arc::new(OSInode::new(
+//                 readable,
+//                 writable,
+//                 inode,
+//             )))
+//         } else {
+//             // create file
+//             ROOT_INODE.create(name)
+//                 .map(|inode| {
+//                     Arc::new(OSInode::new(
+//                         readable,
+//                         writable,
+//                         inode,
+//                     ))
+//                 })
+//         }
+//     } else {
+//         ROOT_INODE.find(name)
+//             .map(|inode| {
+//                 if flags.contains(OpenFlags::TRUNC) {
+//                     inode.clear();
+//                 }
+//                 Arc::new(OSInode::new(
+//                     readable,
+//                     writable,
+//                     inode
+//                 ))
+//             })
+//     }
+// }
+
+pub fn open(work_path: &str, path: &str, flags: OpenFlags, dtype: DiskInodeType) -> Option<Arc<OSInode>> {
+    // 找到当前路径的inode(file, directory)
+    let cur_inode = {
+        if work_path == "/" {
+            ROOT_INODE.clone()
+        }else {
+            let wpath: Vec<&str> = work_path.split('/').collect();
+            ROOT_INODE.find_vfile_bypath(wpath).unwrap()
+        }
+    };
+    let mut pathv: Vec<&str> = path.split('/').collect();
+
+    let (readable, writeable) = flags.read_write();
     if flags.contains(OpenFlags::CREATE) {
-        if let Some(inode) = ROOT_INODE.find(name) {
-            // clear size
-            inode.clear();
-            Some(Arc::new(OSInode::new(
-                readable,
-                writable,
-                inode,
-            )))
-        } else {
+        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
+            inode.remove();
+        }
+        {
             // create file
-            ROOT_INODE.create(name)
+            let name = pathv.pop().unwrap();
+            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()){
+                let attribute = {
+                    match dtype {
+                        DiskInodeType::Directory=>{ ATTRIBUTE_DIRECTORY }
+                        DiskInodeType::File=>{ ATTRIBUTE_ARCHIVE }
+                    }
+                };
+                temp_inode.create( name, attribute)
                 .map(|inode| {
                     Arc::new(OSInode::new(
                         readable,
-                        writable,
+                        writeable,
                         inode,
                     ))
                 })
+            }else{
+                None
+            }
         }
-    } else {
-        ROOT_INODE.find(name)
+    }else {
+        cur_inode.find_vfile_bypath(pathv)
             .map(|inode| {
                 if flags.contains(OpenFlags::TRUNC) {
                     inode.clear();
                 }
                 Arc::new(OSInode::new(
                     readable,
-                    writable,
+                    writeable,
                     inode
                 ))
             })

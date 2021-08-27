@@ -7,7 +7,7 @@ use crate::mm::{
     translated_str,
 };
 use crate::task::{current_user_token, current_task};
-use crate::fs::{File, FileType, OpenFlags, make_pipe, open_file};
+use crate::fs::{File, FileDescriptor, FileType, OpenFlags, make_pipe, open};
 use alloc::sync::Arc;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
@@ -53,7 +53,11 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
-        let file = file.clone();
+        let file: Arc<dyn File + Send + Sync> = match &file.ftype {
+            FileType::Abstr(f) => {f.clone()},
+            FileType::File(f) => {f.clone()},
+            _ => return -1,
+        };
         if !file.readable() {
             return -1;
         }
@@ -71,13 +75,17 @@ pub fn sys_open(path: *const u8, flags: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let path = translated_str(token, path);
+    let open_flags = OpenFlags::from_bits(flags).unwrap();
     if let Some(inode) = open_file(
         path.as_str(),
-        OpenFlags::from_bits(flags).unwrap()
+        open_flags
     ) {
         let mut inner = task.acquire_inner_lock();
         let fd = inner.alloc_fd();
-        inner.fd_table[fd] = Some(inode);
+        inner.fd_table[fd] = Some(FileDescriptor::new(
+            open_flags.contains(OpenFlags::CLOEXEC),
+            FileType::File(inode)
+        ));
         fd as isize
     } else {
         -1
@@ -103,9 +111,19 @@ pub fn sys_pipe(pipe: *mut usize) -> isize {
     let mut inner = task.acquire_inner_lock();
     let (pipe_read, pipe_write) = make_pipe();
     let read_fd = inner.alloc_fd();
-    inner.fd_table[read_fd] = Some(pipe_read);
+    inner.fd_table[read_fd] = Some(
+        FileDescriptor::new(
+            false, 
+            FileType::Abstr(pipe_read)
+        )
+    );
     let write_fd = inner.alloc_fd();
-    inner.fd_table[write_fd] = Some(pipe_write);
+    inner.fd_table[write_fd] = Some(
+        FileDescriptor::new(
+            false, 
+            FileType::Abstr(pipe_write)
+        )
+    );
     *translated_refmut(token, pipe) = read_fd;
     *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd;
     0
@@ -121,6 +139,6 @@ pub fn sys_dup(fd: usize) -> isize {
         return -1;
     }
     let new_fd = inner.alloc_fd();
-    inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
+    inner.fd_table[new_fd] = Some(*inner.fd_table[fd].as_ref().unwrap().clone());
     new_fd as isize
 }

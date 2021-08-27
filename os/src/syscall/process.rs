@@ -11,10 +11,7 @@ use crate::mm::{
     translated_refmut,
     translated_ref,
 };
-use crate::fs::{
-    open_file,
-    OpenFlags,
-};
+use crate::fs::{DiskInodeType, OpenFlags, open};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -63,7 +60,16 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
         args_vec.push(translated_str(token, arg_str_ptr as *const u8));
         unsafe { args = args.add(1); }
     }
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+    let task = current_task().unwrap();
+    let mut inner = task.acquire_inner_lock();
+    let args_vec_copy = args_vec.clone();
+
+    if let Some(app_inode) = open(
+        inner.current_path.as_str(), 
+        path.as_str(), 
+        OpenFlags::RDONLY,
+        DiskInodeType::File
+    ) {
         let all_data = app_inode.read_all();
         let task = current_task().unwrap();
         let argc = args_vec.len();

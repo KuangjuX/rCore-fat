@@ -14,7 +14,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use alloc::string::String;
 use spin::{Mutex, MutexGuard};
-use crate::fs::{File, FileDescriptor, Stdin, Stdout};
+use crate::fs::{File, FileDescriptor, Stdin, Stdout, FileType};
 
 pub type FileDescriptorTable = Vec<Option<FileDescriptor>>;
 pub struct TaskControlBlock {
@@ -34,7 +34,10 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
+
+    // 文件信息
     pub fd_table: FileDescriptorTable,
+    pub current_path: String
 }
 
 impl TaskControlBlockInner {
@@ -95,12 +98,22 @@ impl TaskControlBlock {
                 exit_code: 0,
                 fd_table: vec![
                     // 0 -> stdin
-                    Some(Arc::new(Stdin)),
+                    Some(FileDescriptor::new(
+                        false,
+                        FileType::Abstr(Arc::new(Stdin))
+                    )),
                     // 1 -> stdout
-                    Some(Arc::new(Stdout)),
+                    Some(FileDescriptor::new(
+                        false,
+                        FileType::Abstr(Arc::new(Stdout))
+                    )),
                     // 2 -> stderr
-                    Some(Arc::new(Stdout)),
+                    Some(FileDescriptor::new(
+                        false,
+                        FileType::Abstr(Arc::new(Stdout))
+                    )),
                 ],
+                current_path: String::from("/")
             }),
         };
         // prepare TrapContext in user space
@@ -183,10 +196,10 @@ impl TaskControlBlock {
         // push a goto_trap_return task_cx on the top of kernel stack
         let task_cx_ptr = kernel_stack.push_on_top(TaskContext::goto_trap_return());
         // copy fd table
-        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        let mut new_fd_table: FileDescriptorTable = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
-                new_fd_table.push(Some(file.clone()));
+                new_fd_table.push(Some( *file.clone() ));
             } else {
                 new_fd_table.push(None);
             }
@@ -204,6 +217,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: new_fd_table,
+                current_path: parent_inner.current_path.clone()
             }),
         });
         // add child
