@@ -71,26 +71,26 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_open(path: *const u8, flags: u32) -> isize {
-    let task = current_task().unwrap();
-    let token = current_user_token();
-    let path = translated_str(token, path);
-    let open_flags = OpenFlags::from_bits(flags).unwrap();
-    if let Some(inode) = open_file(
-        path.as_str(),
-        open_flags
-    ) {
-        let mut inner = task.acquire_inner_lock();
-        let fd = inner.alloc_fd();
-        inner.fd_table[fd] = Some(FileDescriptor::new(
-            open_flags.contains(OpenFlags::CLOEXEC),
-            FileType::File(inode)
-        ));
-        fd as isize
-    } else {
-        -1
-    }
-}
+// pub fn sys_open(path: *const u8, flags: u32) -> isize {
+//     let task = current_task().unwrap();
+//     let token = current_user_token();
+//     let path = translated_str(token, path);
+//     let open_flags = OpenFlags::from_bits(flags).unwrap();
+//     if let Some(inode) = open_file(
+//         path.as_str(),
+//         open_flags
+//     ) {
+//         let mut inner = task.acquire_inner_lock();
+//         let fd = inner.alloc_fd();
+//         inner.fd_table[fd] = Some(FileDescriptor::new(
+//             open_flags.contains(OpenFlags::CLOEXEC),
+//             FileType::File(inode)
+//         ));
+//         fd as isize
+//     } else {
+//         -1
+//     }
+// }
 
 pub fn sys_close(fd: usize) -> isize {
     let task = current_task().unwrap();
@@ -139,6 +139,6 @@ pub fn sys_dup(fd: usize) -> isize {
         return -1;
     }
     let new_fd = inner.alloc_fd();
-    inner.fd_table[new_fd] = Some(*inner.fd_table[fd].as_ref().unwrap().clone());
+    inner.fd_table[new_fd] = Some(inner.fd_table[fd].as_ref().unwrap().clone());
     new_fd as isize
 }

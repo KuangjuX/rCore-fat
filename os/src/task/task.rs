@@ -13,6 +13,7 @@ use alloc::sync::{Weak, Arc};
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::string::String;
+use lazy_static::__Deref;
 use spin::{Mutex, MutexGuard};
 use crate::fs::{File, FileDescriptor, Stdin, Stdout, FileType};
 
@@ -199,7 +200,7 @@ impl TaskControlBlock {
         let mut new_fd_table: FileDescriptorTable = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
-                new_fd_table.push(Some( *file.clone() ));
+                new_fd_table.push(Some( file.clone() ));
             } else {
                 new_fd_table.push(None);
             }

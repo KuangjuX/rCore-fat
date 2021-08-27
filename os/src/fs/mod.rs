@@ -6,6 +6,7 @@ mod dir;
 use crate::mm::UserBuffer;
 use alloc::sync::Arc;
 
+#[derive(Clone)]
 pub struct FileDescriptor {
     pub cloexec: bool,
     pub ftype: FileType
@@ -29,6 +30,7 @@ impl FileDescriptor {
 }
 
 /// 文件类型
+#[derive(Clone)]
 pub enum FileType {
     File(Arc<OSInode>),
     Abstr(Arc<dyn File + Send + Sync>)
