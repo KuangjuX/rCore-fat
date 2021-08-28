@@ -4,24 +4,25 @@ use std::sync::{ Mutex, Arc };
 use std::ptr;
 use clap::{Arg, App};
 
-use fat32::BlockDevice;
-use fat32::BIOSParameterBlock;
-use fat32::{ reverse_u16, reverse_u32 };
-use fat32::FAT;
+use FAT32::{
+    BlockDevice,
+    FAT32Manager,
+    VFile,
+    ShortDirEntry,
+    ATTRIBUTE_ARCHIVE,
+    ATTRIBUTE_DIRECTORY
+};
+
 
 const BSIZE: usize = 512;
 
-const FSSIZE: usize = 8192;
-
-const FATSIZE: usize = 32;
 
 // [Boot | FAT | Root Dir Sector | Data]
 
-#[derive(Clone)]
-struct BlockFile(Arc<Mutex<File>>);
+struct BlockFile(Mutex<File>);
 
 impl BlockDevice for BlockFile {
-    fn read(&self, block_id: usize, buf: &mut [u8]) {
+    fn read_block(&self, block_id: usize, buf: &mut [u8]) {
         let offset = (block_id * BSIZE) as u64;
         let mut file = self.0.lock().unwrap();
         file.seek(SeekFrom::Start(offset))
@@ -29,7 +30,7 @@ impl BlockDevice for BlockFile {
         assert_eq!(file.read(buf).unwrap(), BSIZE, "Not a complete block!");
     }
 
-    fn write(&self, block_id: usize, buf: &[u8]) {
+    fn write_block(&self, block_id: usize, buf: &[u8]) {
         let offset = (block_id * BSIZE) as u64;
         let mut file = self.0.lock().unwrap();
         file.seek(SeekFrom::Start(offset))
@@ -38,80 +39,79 @@ impl BlockDevice for BlockFile {
     }
 }
 
-impl BlockFile {
-    fn write_bpb(&self, bpb: &BIOSParameterBlock) {
-        let mut buf: Vec<u8> = vec![0; BSIZE];
-        unsafe{
-            ptr::write(buf.as_mut_ptr() as *mut BIOSParameterBlock, *bpb);
-        }
-    }
-}
-
-impl BlockFile {
-    fn zero(&self) {
-        let buf = vec![0;BSIZE];
-        for i in 0..FSSIZE {
-            self.write(i, &buf);
-        }
-    }
-}
-
 fn main() {
+    make().unwrap();
+}
+
+fn make() -> std::io::Result<()> {
     let matches = App::new("EasyFileSystem packer")
-    .arg(Arg::with_name("source")
-        .short("s")
-        .long("source")
-        .takes_value(true)
-        .help("Executable source dir(with backslash)")
-    )
-    .arg(Arg::with_name("target")
-        .short("t")
-        .long("target")
-        .takes_value(true)
-        .help("Executable target dir(with backslash)")    
-    )
-    .get_matches();
+        .arg(Arg::with_name("source")
+            .short("s") // 对应输入的 -s
+            .long("source")//对应输入 --source
+            .takes_value(true)
+            .help("Executable source dir(with backslash)")
+        )
+        .arg(Arg::with_name("target")
+            .short("t")
+            .long("target")
+            .takes_value(true)
+            .help("Executable target dir(with backslash)")    
+        )
+        .get_matches();
     let src_path = matches.value_of("source").unwrap();
     let target_path = matches.value_of("target").unwrap();
     println!("src_path = {}\ntarget_path = {}", src_path, target_path);
-
-    let device = BlockFile(
-        Arc::new(
-            Mutex::new(
-                    OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(format!("{}{}", target_path, "fs.img"))
-                    .expect("Fail to open fs.img")
-            )
-        )
-    );
     
-    // Initialize fs.img
-    device.zero();
+    // 打开U盘
+    let block_file = Arc::new(BlockFile(Mutex::new({
+        let f = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(format!("{}{}", target_path, "fs.img"))?;
+        f.set_len(8192 * 512).unwrap();
+        f
+    })));
+    
+    let fs_manager = FAT32Manager::open(block_file.clone());
+    let fs_reader = fs_manager.read();
+    let root_vfile = fs_reader.get_root_vfile(&fs_manager);
+    println!("first date sec = {}", fs_reader.first_data_sector());
+    drop(fs_reader);
 
-    // Initialize bpb in fs.img
-    let mut bpb = BIOSParameterBlock::uninit();
-    bpb.reserved_sector = 1;
-    bpb.num_fat = 1;
-    bpb.total_sector = FSSIZE as u32;
-    bpb.root_cluster = 2;
-    device.write_bpb(&bpb);
-
-
-    let fat1 = bpb.fat1();
-    let clusters = bpb.count_of_clusters();
-
-    // Initlizate File Allocation Table
-    let mut fat = FAT::new(1, 0, Arc::new(device.clone()));
-    fat.fat_offset = fat1;
-    for cluster in 0..= clusters {
-        fat.write(cluster as u32, 0xFFFFFFFF);
+    // 从host获取应用名
+    let apps: Vec<_> = read_dir(src_path)
+        .unwrap()
+        .into_iter()
+        .map(|dir_entry| {
+            let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
+            // 丢弃后缀 从'.'到末尾(len-1)
+            name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
+            name_with_ext
+        })
+        .collect();
+    for app in apps {
+        // load app data from host file system
+        let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
+        let mut all_data: Vec<u8> = Vec::new();
+        host_file.read_to_end(&mut all_data).unwrap();
+        // create a file in easy-fs
+        println!("before create");
+        let o_vfile = root_vfile.create(app.as_str(), ATTRIBUTE_ARCHIVE);
+        if o_vfile.is_none(){
+            continue;
+        }
+        let vfile = o_vfile.unwrap();
+        println!("after create");
+        // write data to easy-fs
+        println!("file_len = {}", all_data.len());
+        vfile.write_at(0, all_data.as_slice());
+        fs_manager.read().cache_write_back();
     }
+    // list apps
 
-    // Initialize Root Dir Sector
-
-    // initialize Data Sector
-
+    for app in root_vfile.ls_lite().unwrap() {
+        println!("{}", app.0);
+    }
+    Ok(())
 }
