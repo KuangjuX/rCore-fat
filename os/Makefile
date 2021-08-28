@@ -7,6 +7,12 @@ DISASM_TMP := target/$(TARGET)/$(MODE)/asm
 FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
 SDCARD := /dev/sdb
 APPS := ../user/src/bin/*
+# FS_IMG_DIR	:= ../mkfs
+# ifeq ($(BOARD), k210)
+# 	FS_IMG := /dev/sdb1
+# else 
+# 	FS_IMG := ${FS_IMG_DIR}/fat32.img
+# endif
 
 # BOARD
 BOARD ?= qemu
@@ -50,7 +56,7 @@ $(KERNEL_BIN): kernel
 
 $(FS_IMG): $(APPS)
 	@cd ../user && make build
-	@cd ../easy-fs-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+	@cd ../mkfs && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
 
 $(APPS):
 
