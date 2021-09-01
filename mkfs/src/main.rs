@@ -13,13 +13,17 @@ use FAT32::{
     ATTRIBUTE_DIRECTORY
 };
 
+use crate::init::{init_boot, init_fsinfo};
+
+mod init;
+
 
 const BSIZE: usize = 512;
 
 
 // [Boot | FAT | Root Dir Sector | Data]
 
-struct BlockFile(Mutex<File>);
+pub struct BlockFile(Mutex<File>);
 
 impl BlockDevice for BlockFile {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
@@ -72,6 +76,8 @@ fn make() -> std::io::Result<()> {
         f.set_len(8192 * 512).unwrap();
         f
     })));
+    init_boot(block_file.clone());
+    init_fsinfo(block_file.clone());
     
     let fs_manager = FAT32Manager::create(block_file.clone());
     let fs_reader = fs_manager.read();

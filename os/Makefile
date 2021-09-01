@@ -68,6 +68,7 @@ kernel:
 
 clean:
 	@cargo clean
+	@rm ../user/target/riscv64gc-unknown-none-elf/release/fs.img
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
