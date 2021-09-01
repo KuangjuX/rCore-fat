@@ -73,7 +73,7 @@ fn make() -> std::io::Result<()> {
         f
     })));
     
-    let fs_manager = FAT32Manager::open(block_file.clone());
+    let fs_manager = FAT32Manager::create(block_file.clone());
     let fs_reader = fs_manager.read();
     let root_vfile = fs_reader.get_root_vfile(&fs_manager);
     println!("first date sec = {}", fs_reader.first_data_sector());
