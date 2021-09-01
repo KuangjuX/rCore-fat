@@ -253,7 +253,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, dtype: DiskInodeType)
     // 找到当前路径的inode(file, directory)
     let cur_inode = {
         if work_path == "/" {
-            println!("root directory");
+            // println!("root directory");
             ROOT_INODE.clone()
         }else {
             let wpath: Vec<&str> = work_path.split('/').collect();

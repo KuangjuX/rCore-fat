@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::ptr;
-use FAT32::{ATTRIBUTE_VOLUME_ID, BLOCK_SZ, BlockDevice, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
+use FAT32::{ATTRIBUTE_DIRECTORY, BLOCK_SZ, BlockDevice, DATA_SIZE, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
 use super::BlockFile;
 
 
@@ -45,6 +45,8 @@ pub fn init_fsinfo(block_device: Arc<BlockFile>) {
     unsafe{
         ptr::write(buf.as_mut_ptr() as *mut u32, LEAD_SIGNATURE);
         ptr::write(buf.as_mut_ptr().offset(484) as *mut u32, SECOND_SIGNATURE);
+        // 空闲块
+        ptr::write(buf.as_mut_ptr().offset(488) as *mut u32, DATA_SIZE as u32);
     }
     block_device.write_block(1, &buf);
 }
@@ -61,16 +63,12 @@ pub fn init_fat(block_device: Arc<BlockFile>) {
 /// 这里需要初始化root directory
 pub fn init_root(block_device: Arc<BlockFile>) {
     let mut buf = [0u8; 512];
-    let mut name = [0u8; 8];
-    let ext = [0u8; 3];
-    unsafe {
-        ptr::write(name.as_mut_ptr() as *mut u8, "/".as_bytes()[0]);
-    }
-    let root_dir = ShortDirEntry::new(
-        &name,
-        &ext, 
-        ATTRIBUTE_VOLUME_ID
+    let mut root_dir = ShortDirEntry::new(
+        &[0x2F,0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20], 
+        &[0x20, 0x20, 0x20], 
+        ATTRIBUTE_DIRECTORY
     );
+    root_dir.set_first_cluster(2);
     unsafe{
         ptr::write(buf.as_mut_ptr() as *mut ShortDirEntry, root_dir);
     }
