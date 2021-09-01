@@ -1,16 +1,6 @@
 use std::sync::Arc;
 use std::ptr;
-use FAT32::{
-    BlockDevice,
-    FatBS,
-    FatExtBS,
-    FSInfo,
-    SECTOR_SIZE,
-    BLOCK_SZ,
-    FAT_SIZE,
-    LEAD_SIGNATURE,
-    SECOND_SIGNATURE
-};
+use FAT32::{ATTRIBUTE_VOLUME_ID, BLOCK_SZ, BlockDevice, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
 use super::BlockFile;
 
 
@@ -71,6 +61,18 @@ pub fn init_fat(block_device: Arc<BlockFile>) {
 /// 这里需要初始化root directory
 pub fn init_root(block_device: Arc<BlockFile>) {
     let mut buf = [0u8; 512];
-
+    let mut name = [0u8; 8];
+    let ext = [0u8; 3];
+    unsafe {
+        ptr::write(name.as_mut_ptr() as *mut u8, "/".as_bytes()[0]);
+    }
+    let root_dir = ShortDirEntry::new(
+        &name,
+        &ext, 
+        ATTRIBUTE_VOLUME_ID
+    );
+    unsafe{
+        ptr::write(buf.as_mut_ptr() as *mut ShortDirEntry, root_dir);
+    }
     block_device.write_block(10, &buf);
 }
