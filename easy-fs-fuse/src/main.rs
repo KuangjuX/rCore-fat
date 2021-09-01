@@ -71,6 +71,7 @@ fn easy_fs_pack() -> std::io::Result<()> {
         .into_iter()
         .map(|dir_entry| {
             let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
+            println!("name_with_ext: {}", name_with_ext);
             name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
             name_with_ext
         })
@@ -80,9 +81,9 @@ fn easy_fs_pack() -> std::io::Result<()> {
         let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
         let mut all_data: Vec<u8> = Vec::new();
         host_file.read_to_end(&mut all_data).unwrap();
-        // create a file in easy-fs
+        // create a file in FAT32
         let inode = root_inode.create(app.as_str()).unwrap();
-        // write data to easy-fs
+        // write data to FAT32
         inode.write_at(0, all_data.as_slice());
     }
     // list apps

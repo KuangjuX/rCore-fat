@@ -168,7 +168,9 @@ impl OSInode {
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+        // println!("open fat32 manager.");
         let manager_reader = fat32_manager.read();
+        // println!("read manager.");
         Arc::new(manager_reader.get_root_vfile(&fat32_manager))
     };
 }
@@ -251,6 +253,7 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, dtype: DiskInodeType)
     // 找到当前路径的inode(file, directory)
     let cur_inode = {
         if work_path == "/" {
+            println!("root directory");
             ROOT_INODE.clone()
         }else {
             let wpath: Vec<&str> = work_path.split('/').collect();

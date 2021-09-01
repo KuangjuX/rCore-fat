@@ -58,3 +58,19 @@ pub fn init_fsinfo(block_device: Arc<BlockFile>) {
     }
     block_device.write_block(1, &buf);
 }
+
+pub fn init_fat(block_device: Arc<BlockFile>) {
+    let mut buf = [0u8; 512];
+    unsafe{
+        ptr::write(buf.as_mut_ptr() as *mut u64, 0xFFFFFFFFFFFFFFFF);
+        ptr::write(buf.as_mut_ptr().offset(8) as *mut u32, 0x0FFFFFFF);
+    }
+    block_device.write_block(2, &buf);
+}
+
+/// 这里需要初始化root directory
+pub fn init_root(block_device: Arc<BlockFile>) {
+    let mut buf = [0u8; 512];
+
+    block_device.write_block(10, &buf);
+}

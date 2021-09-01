@@ -13,7 +13,7 @@ use FAT32::{
     ATTRIBUTE_DIRECTORY
 };
 
-use crate::init::{init_boot, init_fsinfo};
+use crate::init::{init_boot, init_fat, init_fsinfo, init_root};
 
 mod init;
 
@@ -76,8 +76,11 @@ fn make() -> std::io::Result<()> {
         f.set_len(8192 * 512).unwrap();
         f
     })));
+    // 初始化文件系统
     init_boot(block_file.clone());
     init_fsinfo(block_file.clone());
+    init_fat(block_file.clone());
+    init_root(block_file.clone());
     
     let fs_manager = FAT32Manager::create(block_file.clone());
     let fs_reader = fs_manager.read();
@@ -92,6 +95,7 @@ fn make() -> std::io::Result<()> {
         .map(|dir_entry| {
             let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
             // 丢弃后缀 从'.'到末尾(len-1)
+            println!("name_with_ext: {}", name_with_ext);
             name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
             name_with_ext
         })
@@ -101,7 +105,7 @@ fn make() -> std::io::Result<()> {
         let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
         let mut all_data: Vec<u8> = Vec::new();
         host_file.read_to_end(&mut all_data).unwrap();
-        // create a file in easy-fs
+        // create a file in FAT32
         println!("before create");
         let o_vfile = root_vfile.create(app.as_str(), ATTRIBUTE_ARCHIVE);
         if o_vfile.is_none(){
@@ -109,7 +113,7 @@ fn make() -> std::io::Result<()> {
         }
         let vfile = o_vfile.unwrap();
         println!("after create");
-        // write data to easy-fs
+        // write data to FAT32
         println!("file_len = {}", all_data.len());
         vfile.write_at(0, all_data.as_slice());
         fs_manager.read().cache_write_back();
