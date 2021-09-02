@@ -3,6 +3,15 @@ use std::ptr;
 use FAT32::{ATTRIBUTE_DIRECTORY, BLOCK_SZ, BlockDevice, DATA_SIZE, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
 use super::BlockFile;
 
+// Fat32文件系统，block大小（即 sector 大小为 512 bytes）
+// 我们暂时将 1 cluster 设定为 1 sector
+// BiosParamter: 0 sector
+// Fs info: 1 sector
+// FAT1: 2-401 sector
+// FAT2: 402-803 sector
+// 804-805 unused sector
+// RootDir: 806 sector
+
 
 pub fn init_boot(block_device: Arc<BlockFile>) {
     let fat_bs = FatBS {
@@ -52,9 +61,12 @@ pub fn init_fsinfo(block_device: Arc<BlockFile>) {
 }
 
 pub fn init_fat(block_device: Arc<BlockFile>) {
+    // FAT 表项的0号表项和1号表项无用
+    // 2号表项应当记录根目录
     let mut buf = [0u8; 512];
     unsafe{
         ptr::write(buf.as_mut_ptr() as *mut u64, 0xFFFFFFFFFFFFFFFF);
+        // 根目录此时size大小为0，因此没有后续的簇号记录
         ptr::write(buf.as_mut_ptr().offset(8) as *mut u32, 0x0FFFFFFF);
     }
     block_device.write_block(2, &buf);
@@ -72,5 +84,7 @@ pub fn init_root(block_device: Arc<BlockFile>) {
     unsafe{
         ptr::write(buf.as_mut_ptr() as *mut ShortDirEntry, root_dir);
     }
+
     block_device.write_block(10, &buf);
+    // 之后需要初始化根目录中的文件或者目录
 }

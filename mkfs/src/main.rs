@@ -21,7 +21,7 @@ mod init;
 const BSIZE: usize = 512;
 
 
-// [Boot | FAT | Root Dir Sector | Data]
+// [Boot | FAT | Root Dir Sector | Data ]
 
 pub struct BlockFile(Mutex<File>);
 
@@ -76,7 +76,11 @@ fn make() -> std::io::Result<()> {
         f.set_len(8192 * 512).unwrap();
         f
     })));
+
     // 初始化文件系统
+    // 应当首先初始化 boot_secotr, fs_info, FAT 表，根目录目录项
+    // 随后将根目录下的文件或目录作为 entry 写入根目录 sector 中
+
     init_boot(block_file.clone());
     init_fsinfo(block_file.clone());
     init_fat(block_file.clone());
