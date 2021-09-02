@@ -6,6 +6,8 @@
 #![feature(const_in_array_repeat_expressions)]
 #![feature(alloc_error_handler)]
 
+
+
 extern crate alloc;
 
 #[macro_use]
@@ -46,6 +48,7 @@ pub fn rust_main() -> ! {
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     fs::list_apps();
+    println!("add initproc...\n");
     task::add_initproc();
     println!("run tasks...\n");
     task::run_tasks();

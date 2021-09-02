@@ -101,17 +101,20 @@ fn make() -> std::io::Result<()> {
         })
         .collect();
     for app in apps {
-        // load app data from host file system
+        // 获取所有用户可执行程序
         let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
         let mut all_data: Vec<u8> = Vec::new();
+        // 将用户程序写入缓冲区
         host_file.read_to_end(&mut all_data).unwrap();
-        // create a file in FAT32
+
+        // 创建一个FAT32文件
         let o_vfile = root_vfile.create(app.as_str(), ATTRIBUTE_ARCHIVE);
         if o_vfile.is_none(){
             continue;
         }
         let vfile = o_vfile.unwrap();
-        // write data to FAT32
+
+        // 向文件镜像中写入数据
         println!("file_len = {}", all_data.len());
         if app == "initproc" {
             vfile.write_at(0, all_data.as_slice());

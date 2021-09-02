@@ -75,6 +75,7 @@ impl OSInode {
         v
     } 
 
+    /// 从文件中读出信息放入缓冲区中
     pub fn read_all(&self) -> Vec<u8> {
         let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
@@ -253,7 +254,6 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags, dtype: DiskInodeType)
     // 找到当前路径的inode(file, directory)
     let cur_inode = {
         if work_path == "/" {
-            // println!("root directory");
             ROOT_INODE.clone()
         }else {
             let wpath: Vec<&str> = work_path.split('/').collect();
