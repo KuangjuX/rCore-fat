@@ -8,9 +8,9 @@ use super::BlockFile;
 // BiosParamter: 0 sector
 // Fs info: 1 sector
 // FAT1: 2-401 sector
-// FAT2: 402-803 sector
-// 804-805 unused sector
-// RootDir: 806 sector
+// FAT2: 402-801 sector
+// 802-803 unused sector
+// RootDir: 804 sector
 
 
 pub fn init_boot(block_device: Arc<BlockFile>) {
@@ -85,6 +85,6 @@ pub fn init_root(block_device: Arc<BlockFile>) {
         ptr::write(buf.as_mut_ptr() as *mut ShortDirEntry, root_dir);
     }
 
-    block_device.write_block(10, &buf);
+    block_device.write_block(804, &buf);
     // 之后需要初始化根目录中的文件或者目录
 }
