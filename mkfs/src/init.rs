@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::ptr;
-use FAT32::{ATTRIBUTE_DIRECTORY, BLOCK_SZ, BlockDevice, DATA_SIZE, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
+use super::{ATTRIBUTE_DIRECTORY, BLOCK_SZ, BlockDevice, DATA_SIZE, FAT_SIZE, FatBS, FatExtBS, LEAD_SIGNATURE, SECOND_SIGNATURE, SECTOR_SIZE, ShortDirEntry};
 use super::BlockFile;
 
 // Fat32文件系统，block大小（即 sector 大小为 512 bytes）
@@ -85,6 +85,7 @@ pub fn init_root(block_device: Arc<BlockFile>) {
         ptr::write(buf.as_mut_ptr() as *mut ShortDirEntry, root_dir);
     }
 
-    block_device.write_block(804, &buf);
+    block_device.write_block(802, &buf);
+    // 更新FAT表，把Root Direntry 留出来
     // 之后需要初始化根目录中的文件或者目录
 }

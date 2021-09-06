@@ -49,6 +49,7 @@ pub fn sys_fork() -> isize {
 }
 
 pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
+    println!("user call sys_exec.");
     let token = current_user_token();
     let path = translated_str(token, path);
     let mut args_vec: Vec<String> = Vec::new();
@@ -61,18 +62,23 @@ pub fn sys_exec(path: *const u8, mut args: *const usize) -> isize {
         unsafe { args = args.add(1); }
     }
     let task = current_task().unwrap();
-    let mut inner = task.acquire_inner_lock();
+    let inner = task.acquire_inner_lock();
+    let current_path = inner.current_path.as_str();
     let args_vec_copy = args_vec.clone();
 
+    // println!("work_path: {}", inner.current_path);
+    // println!("path: {}", path.as_str());
     if let Some(app_inode) = open(
-        inner.current_path.as_str(), 
+        current_path, 
         path.as_str(), 
         OpenFlags::RDONLY,
         DiskInodeType::File
     ) {
         let all_data = app_inode.read_all();
+        println!("data len: {}", all_data.len());
         let task = current_task().unwrap();
         let argc = args_vec.len();
+        drop(inner);
         task.exec(all_data.as_slice(), args_vec);
         // return argc because cx.x[10] will be covered with it later
         argc as isize

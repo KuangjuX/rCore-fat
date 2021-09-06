@@ -4,14 +4,17 @@ use std::sync::{ Mutex, Arc };
 use std::ptr;
 use clap::{Arg, App};
 
-use FAT32::{
-    BlockDevice,
-    FAT32Manager,
-    VFile,
-    ShortDirEntry,
-    ATTRIBUTE_ARCHIVE,
-    ATTRIBUTE_DIRECTORY
-};
+pub mod fs;
+pub use fs::*;
+
+// use fs::{
+//     BlockDevice,
+//     FAT32Manager,
+//     VFile,
+//     ShortDirEntry,
+//     ATTRIBUTE_ARCHIVE,
+//     ATTRIBUTE_DIRECTORY
+// };
 
 use crate::init::{init_boot, init_fat, init_fsinfo, init_root};
 
@@ -104,30 +107,30 @@ fn make() -> std::io::Result<()> {
             name_with_ext
         })
         .collect();
-    for app in apps{
-        if app == "initproc" {
-            // 获取所有用户可执行程序
-            let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
-            let mut all_data: Vec<u8> = Vec::new();
-            // 将用户程序写入缓冲区
-            host_file.read_to_end(&mut all_data).unwrap();
+    for app in apps {
+       
+        // 获取所有用户可执行程序
+        let mut host_file = File::open(format!("{}{}", target_path, app)).unwrap();
+        let mut all_data: Vec<u8> = Vec::new();
+        // 将用户程序写入缓冲区
+        host_file.read_to_end(&mut all_data).unwrap();
 
-            // 创建一个FAT32文件
-            let o_vfile = root_vfile.create(app.as_str(), ATTRIBUTE_ARCHIVE);
-            if o_vfile.is_none() {
-                // println!("vfile is none.\n");
-                continue;
-            }
-            let vfile = o_vfile.unwrap();
-            println!("vfile: name {}, short_sector {}, short_offset {}", vfile.get_name(), vfile.short_sector, vfile.short_offset);
-            println!("vfile is dir: {}", vfile.is_dir());
-
-            // 向文件镜像中写入数据
-            println!("file_len = {}", all_data.len());
-            
-            vfile.write_at(0, all_data.as_slice());
-            fs_manager.read().cache_write_back();
+        // 创建一个FAT32文件
+        let o_vfile = root_vfile.create(app.as_str(), ATTRIBUTE_ARCHIVE);
+        if o_vfile.is_none() {
+            // println!("vfile is none.\n");
+            continue;
         }
+        let vfile = o_vfile.unwrap();
+        println!("vfile: name {}, short_sector {}, short_offset {}", vfile.get_name(), vfile.short_sector, vfile.short_offset);
+        println!("vfile is dir: {}", vfile.is_dir());
+
+        // 向文件镜像中写入数据
+        println!("file_len = {}", all_data.len());
+        
+        vfile.write_at(0, all_data.as_slice());
+        fs_manager.read().cache_write_back();
+        
         
     }
     // list apps
