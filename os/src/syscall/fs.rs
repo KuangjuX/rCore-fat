@@ -7,7 +7,7 @@ use crate::mm::{
     translated_str,
 };
 use crate::task::{current_user_token, current_task};
-use crate::fs::{File, FileDescriptor, FileType, OpenFlags, make_pipe, open};
+use crate::fs::{File, FileDescriptor, FileType, OpenFlags, make_pipe, open, DiskInodeType};
 use alloc::sync::Arc;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
@@ -71,26 +71,30 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-// pub fn sys_open(path: *const u8, flags: u32) -> isize {
-//     let task = current_task().unwrap();
-//     let token = current_user_token();
-//     let path = translated_str(token, path);
-//     let open_flags = OpenFlags::from_bits(flags).unwrap();
-//     if let Some(inode) = open_file(
-//         path.as_str(),
-//         open_flags
-//     ) {
-//         let mut inner = task.acquire_inner_lock();
-//         let fd = inner.alloc_fd();
-//         inner.fd_table[fd] = Some(FileDescriptor::new(
-//             open_flags.contains(OpenFlags::CLOEXEC),
-//             FileType::File(inode)
-//         ));
-//         fd as isize
-//     } else {
-//         -1
-//     }
-// }
+pub fn sys_open(path: *const u8, flags: u32) -> isize {
+    let task = current_task().unwrap();
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    let open_flags = OpenFlags::from_bits(flags).unwrap();
+    let mut inner = task.acquire_inner_lock();
+    if let Some(inode) = open(
+        inner.get_work_path().as_str(),
+        path.as_str(),
+        open_flags,
+        DiskInodeType::File
+    ) {
+        let fd = inner.alloc_fd();
+        inner.fd_table[fd] = Some(FileDescriptor::new(
+            open_flags.contains(OpenFlags::CLOEXEC),
+            FileType::File(inode)
+        ));
+        fd as isize
+    } else {
+        -1
+    }
+}
+
+
 
 pub fn sys_close(fd: usize) -> isize {
     let task = current_task().unwrap();

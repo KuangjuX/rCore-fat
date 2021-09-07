@@ -66,6 +66,10 @@ impl TaskControlBlockInner {
             self.fd_table.len() - 1
         }
     }
+
+    pub fn get_work_path(&self) -> String {
+        self.current_path.clone()
+    }
 }
 
 impl TaskControlBlock {
