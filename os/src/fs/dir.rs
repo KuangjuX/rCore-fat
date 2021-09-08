@@ -1,7 +1,6 @@
-
 use alloc::vec::Vec;
 use core::mem::size_of;
-use core::slice::{ from_raw_parts, from_raw_parts_mut };
+use core::slice::{from_raw_parts, from_raw_parts_mut};
 
 pub const NAME_LIMIE: usize = 128;
 
@@ -16,7 +15,7 @@ pub struct DirEntry {
     pub offset: isize,
     pub reclen: u16,
     pub dtype: u8,
-    pub name: [u8; NAME_LIMIE]
+    pub name: [u8; NAME_LIMIE],
 }
 
 impl DirEntry {
@@ -26,7 +25,7 @@ impl DirEntry {
             offset: 0,
             reclen: 0,
             dtype: size_of::<Self>() as u8,
-            name: [0;NAME_LIMIE]
+            name: [0; NAME_LIMIE],
         }
     }
 
@@ -36,7 +35,7 @@ impl DirEntry {
             offset: offset,
             reclen: reclen,
             dtype: dtype,
-            name: self.name
+            name: self.name,
         };
         self.set_name(name);
     }
@@ -52,21 +51,11 @@ impl DirEntry {
 
     pub fn as_bytes(&self) -> &[u8] {
         let size = size_of::<Self>();
-        unsafe{
-            from_raw_parts(
-                self as *const _ as usize as *const u8, 
-                size
-            )
-        }
+        unsafe { from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
 
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         let size = size_of::<Self>();
-        unsafe {
-            from_raw_parts_mut(
-                self as *mut _ as usize as *mut u8, 
-                size
-            )
-        }
+        unsafe { from_raw_parts_mut(self as *mut _ as usize as *mut u8, size) }
     }
 }

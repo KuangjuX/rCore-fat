@@ -1,7 +1,7 @@
+mod dir;
+mod inode;
 mod pipe;
 mod stdio;
-mod inode;
-mod dir;
 
 use crate::mm::UserBuffer;
 use alloc::sync::Arc;
@@ -9,14 +9,14 @@ use alloc::sync::Arc;
 #[derive(Clone)]
 pub struct FileDescriptor {
     pub cloexec: bool,
-    pub ftype: FileType
+    pub ftype: FileType,
 }
 
 impl FileDescriptor {
     pub fn new(flag: bool, ftype: FileType) -> Self {
         Self {
             cloexec: flag,
-            ftype: ftype
+            ftype: ftype,
         }
     }
 
@@ -33,17 +33,17 @@ impl FileDescriptor {
 #[derive(Clone)]
 pub enum FileType {
     File(Arc<OSInode>),
-    Abstr(Arc<dyn File + Send + Sync>)
+    Abstr(Arc<dyn File + Send + Sync>),
 }
 
-pub trait File : Send + Sync {
+pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
     fn read(&self, buf: UserBuffer) -> usize;
     fn write(&self, buf: UserBuffer) -> usize;
 }
 
-pub use pipe::{Pipe, make_pipe};
+pub use dir::{DirEntry, DT_DIR, DT_REG, DT_UNKNOWN};
+pub use inode::{list_apps, open, DiskInodeType, OSInode, OpenFlags};
+pub use pipe::{make_pipe, Pipe};
 pub use stdio::{Stdin, Stdout};
-pub use inode::{OSInode, open, OpenFlags, list_apps, DiskInodeType};
-pub use dir::{ DirEntry, DT_DIR, DT_REG, DT_UNKNOWN };

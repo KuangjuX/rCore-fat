@@ -1,20 +1,12 @@
-
-use virtio_drivers::{VirtIOBlk, VirtIOHeader};
-use crate::mm::{
-    PhysAddr,
-    VirtAddr,
-    frame_alloc,
-    frame_dealloc,
-    PhysPageNum,
-    FrameTracker,
-    StepByOne,
-    PageTable,
-    kernel_token,
-};
 use super::BlockDevice;
-use spin::Mutex;
+use crate::mm::{
+    frame_alloc, frame_dealloc, kernel_token, FrameTracker, PageTable, PhysAddr, PhysPageNum,
+    StepByOne, VirtAddr,
+};
 use alloc::vec::Vec;
 use lazy_static::*;
+use spin::Mutex;
+use virtio_drivers::{VirtIOBlk, VirtIOHeader};
 
 #[allow(unused)]
 const VIRTIO0: usize = 0x10001000;
@@ -27,19 +19,25 @@ lazy_static! {
 
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
-        self.0.lock().read_block(block_id, buf).expect("Error when reading VirtIOBlk");
+        self.0
+            .lock()
+            .read_block(block_id, buf)
+            .expect("Error when reading VirtIOBlk");
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
-        self.0.lock().write_block(block_id, buf).expect("Error when writing VirtIOBlk");
+        self.0
+            .lock()
+            .write_block(block_id, buf)
+            .expect("Error when writing VirtIOBlk");
     }
 }
 
 impl VirtIOBlock {
     #[allow(unused)]
     pub fn new() -> Self {
-        Self(Mutex::new(VirtIOBlk::new(
-            unsafe { &mut *(VIRTIO0 as *mut VirtIOHeader) }
-        ).unwrap()))
+        Self(Mutex::new(
+            VirtIOBlk::new(unsafe { &mut *(VIRTIO0 as *mut VirtIOHeader) }).unwrap(),
+        ))
     }
 }
 
@@ -48,7 +46,9 @@ pub extern "C" fn virtio_dma_alloc(pages: usize) -> PhysAddr {
     let mut ppn_base = PhysPageNum(0);
     for i in 0..pages {
         let frame = frame_alloc().unwrap();
-        if i == 0 { ppn_base = frame.ppn; }
+        if i == 0 {
+            ppn_base = frame.ppn;
+        }
         assert_eq!(frame.ppn.0, ppn_base.0 + i);
         QUEUE_FRAMES.lock().push(frame);
     }
@@ -72,5 +72,7 @@ pub extern "C" fn virtio_phys_to_virt(paddr: PhysAddr) -> VirtAddr {
 
 #[no_mangle]
 pub extern "C" fn virtio_virt_to_phys(vaddr: VirtAddr) -> PhysAddr {
-    PageTable::from_token(kernel_token()).translate_va(vaddr).unwrap()
+    PageTable::from_token(kernel_token())
+        .translate_va(vaddr)
+        .unwrap()
 }

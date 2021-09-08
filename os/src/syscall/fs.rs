@@ -1,13 +1,6 @@
-
-
-use crate::mm::{
-    UserBuffer,
-    translated_byte_buffer,
-    translated_refmut,
-    translated_str,
-};
-use crate::task::{current_user_token, current_task};
-use crate::fs::{File, FileDescriptor, FileType, OpenFlags, make_pipe, open, DiskInodeType};
+use crate::fs::{make_pipe, open, DiskInodeType, File, FileDescriptor, FileType, OpenFlags};
+use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
+use crate::task::{current_task, current_user_token};
 use alloc::sync::Arc;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
@@ -19,8 +12,8 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     }
     if let Some(file) = &inner.fd_table[fd] {
         let f: Arc<dyn File + Send + Sync> = match &file.ftype {
-            FileType::Abstr(f) => { f.clone() },
-            FileType::File(f) => { f.clone() },
+            FileType::Abstr(f) => f.clone(),
+            FileType::File(f) => f.clone(),
             _ => return -1,
         };
         if !f.writable() {
@@ -28,15 +21,14 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         }
 
         drop(inner);
-        let size = f.write(
-            UserBuffer::new(translated_byte_buffer(token, buf, len))
-        );
+        let size = f.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
         if fd == 2 {
-            let str = str::replace(
-                translated_str(token, buf).as_str(), "\n", "\\n"
-            );       
-            println!("sys_write(fd: {}, buf: {}, len: {}) = {}", fd, str, len, size);
-        }else if fd > 2 {
+            let str = str::replace(translated_str(token, buf).as_str(), "\n", "\\n");
+            println!(
+                "sys_write(fd: {}, buf: {}, len: {}) = {}",
+                fd, str, len, size
+            );
+        } else if fd > 2 {
             println!("sys_write(fd: {}, buf: {}, len: {}", fd, len, size);
         }
         size as isize
@@ -54,8 +46,8 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
     if let Some(file) = &inner.fd_table[fd] {
         let file: Arc<dyn File + Send + Sync> = match &file.ftype {
-            FileType::Abstr(f) => {f.clone()},
-            FileType::File(f) => {f.clone()},
+            FileType::Abstr(f) => f.clone(),
+            FileType::File(f) => f.clone(),
             _ => return -1,
         };
         if !file.readable() {
@@ -63,9 +55,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         }
         // release Task lock manually to avoid deadlock
         drop(inner);
-        file.read(
-            UserBuffer::new(translated_byte_buffer(token, buf, len))
-        ) as isize
+        file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
     }
@@ -81,20 +71,18 @@ pub fn sys_open(path: *const u8, flags: u32) -> isize {
         inner.get_work_path().as_str(),
         path.as_str(),
         open_flags,
-        DiskInodeType::File
+        DiskInodeType::File,
     ) {
         let fd = inner.alloc_fd();
         inner.fd_table[fd] = Some(FileDescriptor::new(
             open_flags.contains(OpenFlags::CLOEXEC),
-            FileType::File(inode)
+            FileType::File(inode),
         ));
         fd as isize
     } else {
         -1
     }
 }
-
-
 
 pub fn sys_close(fd: usize) -> isize {
     let task = current_task().unwrap();
@@ -115,19 +103,9 @@ pub fn sys_pipe(pipe: *mut usize) -> isize {
     let mut inner = task.acquire_inner_lock();
     let (pipe_read, pipe_write) = make_pipe();
     let read_fd = inner.alloc_fd();
-    inner.fd_table[read_fd] = Some(
-        FileDescriptor::new(
-            false, 
-            FileType::Abstr(pipe_read)
-        )
-    );
+    inner.fd_table[read_fd] = Some(FileDescriptor::new(false, FileType::Abstr(pipe_read)));
     let write_fd = inner.alloc_fd();
-    inner.fd_table[write_fd] = Some(
-        FileDescriptor::new(
-            false, 
-            FileType::Abstr(pipe_write)
-        )
-    );
+    inner.fd_table[write_fd] = Some(FileDescriptor::new(false, FileType::Abstr(pipe_write)));
     *translated_refmut(token, pipe) = read_fd;
     *translated_refmut(token, unsafe { pipe.add(1) }) = write_fd;
     0
