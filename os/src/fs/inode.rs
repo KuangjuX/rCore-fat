@@ -159,9 +159,7 @@ impl OSInode {
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
-        // println!("open fat32 manager.");
         let manager_reader = fat32_manager.read();
-        // println!("read manager.");
         Arc::new(manager_reader.get_root_vfile(&fat32_manager))
     };
 }
